@@ -122,12 +122,16 @@
 	(and (eq (first (get problem 'goal-state)) (first state)) 
 			 (eq (second (get problem 'goal-state)) (second state))))
 
+(defun test ()
+	(let ((your-list '(1 2 3 4 5)))
+		(format nil "~s" your-list)))
+
 
 ;;;(load "p2.lisp") (setf *problem* (load-maze-problem "smallMaze.lay")) (bfs *problem*)
 
 ;;if never finds the goal-state, returns nil
 (defun bfs (problem)
-	(let* ((explored ())
+	(let* ((explored (make-hash-table))
 				(start-node (list (get problem 'start-state) (list) 0))
 				(frontier (list start-node)) ;really should be a queue
 				(curr-node)
@@ -162,7 +166,7 @@
 
 	;		(format t "~%curr-state~a pre hash: ~a" curr-state (gethash curr-state explored))
 
-			(push curr-state explored)
+			(setf (gethash (format nil "~s" curr-state) explored) curr-state)
 	;		(setf (gethash curr-state explored) t)
 	;		(format t "~%curr-state post hash: ~a" (gethash curr-state explored))
 
@@ -175,10 +179,8 @@
 
 		;		(format t "~%adj-state ~a adj-state hash ~a" adj-state (gethash adj-state explored))
 
-
-		;find isn't working properly. probably because lists of lists
-				(if (and (null (find adj-state explored)) ;;explored contains states
-								 (null (find adj-node frontier))) ;;frontier contains nodes
+				(if (and (null (gethash (format nil "~s" adj-state) explored)) ;;explored contains states
+								 (null (find adj-node frontier :test #'equal))) ;;frontier contains nodes
 					(progn
 						(setf full-adj-path (append (copy-list curr-path) adj-action))
 						(setf full-adj-path-cost (+ curr-path-cost adj-action-cost))
@@ -188,7 +190,8 @@
 						(if (null frontier)
 							(setf frontier (cons child-node nil))
 							(setf frontier (append frontier (cons child-node nil)))
-							)
+						)
+						(setf (gethash (format nil "~s" adj-state) explored) adj-state)
 	;	(format t "~%frontier: ~a" frontier)
 					)
 				)
