@@ -41,17 +41,6 @@
 
 		(eq expected res)))
 
-;should eventually take a list
-(defun eq-states (state-1 state-2)
-	(and (eq (first state-1) (first state-2))
-			 (eq (second state-1) (second state-2))))
-
-(defun last-elem (the-list)
-	(if (null (cdr the-list))
-		(return-from last-elem (car the-list)))
-	
-	(last-elem (cdr the-list)))
-
 (defun is-valid-path (problem path)
 	(let ((start-state-path (first path))
 				(start-state-problem (get problem 'start-state))
@@ -73,18 +62,13 @@
 							(eq #\% (aref (get problem 'maze) action-y action-x)))
 				(return-from is-valid-path))))
 
-	t
-)
-
-
-;;;WRITE TESTS
-;;;(load "p2.lisp") (setf *problem* (load-maze-problem "tinyMaze.lay")) (bfs *problem*)
+	t)
 
 ;;if never finds the goal-state, returns nil
 (defun bfs (problem)
 	(let* ((explored (make-hash-table :test 'equal))
 				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0))
-				(frontier (list start-node)) ;really should be a queue
+				(frontier (list start-node)) ;should be a queue
 				(curr-node)
 				(curr-state)
 				(curr-path)
@@ -96,43 +80,28 @@
 				(full-adj-path-cost)
 				(child-node))  
 
-	;	(format t "~%start state: ~a~%~agoal state" (get problem 'start-state) (get problem 'goal-state))
-	;	(format t "~%frontier: ~a" frontier)
-		(do ((i 0 (1+ i))) ;no variable updating
+		(do ((i 0 (1+ i))) 
 			((or (eq i -1) (eq (length frontier) 0)) nil) ;replace i with eq 1 for testing
 			
-		;	(format t "~% iteration ~a" i)
-			;can't put all this business in the do bc need the termination condition checked first. (although pop would just be nil so could probably put the curr-node there at least)
 			(setf curr-node (pop frontier))
 
 			(setf curr-state (first curr-node))
 			(setf curr-path (second curr-node))
 			(setf curr-path-cost (third curr-node))
 
-	;		(format t "~%currnode ~a" curr-node)
 	
-	;;the hash table isn't working
 
 			(if (goal-test problem curr-state)
 				(return-from bfs (reverse curr-path)))
 
-		;	(format t "~%curr-state ~a to string ~s" curr-state (format nil "~s" curr-state))
-		;	(format t "~%curr-state~a pre hash: ~a" curr-state (gethash (format nil "~s" curr-state) explored))
-
-		;	(setf (gethash 'a explored) t)
-		;	(format t "~%testhash ~a" (gethash 'a explored))
-
 			(setf (gethash (format nil "~s" curr-state) explored) curr-state)
-		;	(format t "~%curr-state post hash: ~a" (gethash (format nil "~s" curr-state) explored))
 
-	;		(format t "~%successors: ~a" (successors problem curr-state))
 
 			(dolist (adj-node (successors problem curr-state))
 				(setf adj-state (first adj-node))
 				(setf adj-action (second adj-node))
 				(setf adj-action-cost (third adj-node))
 
-		;		(format t "~%adj-state ~a adj-state hash ~a" adj-state (gethash adj-state explored))
 
 				(if (and (null (gethash (format nil "~s" adj-state) explored)) ;;explored contains states
 								 (null (find adj-node frontier :test #'equal))) ;;frontier contains nodes
@@ -144,27 +113,14 @@
 																	 full-adj-path-cost))
 						(if (null frontier)
 							(setf frontier (cons child-node nil))
-							(setf frontier (append frontier (cons child-node nil)))
-						)
-					;	(format t "~%frontier: ~a" frontier)
+							(setf frontier (append frontier (cons child-node nil))))
 
-						(setf (gethash (format nil "~s" adj-state) explored) adj-state)
-	;	(format t "~%frontier: ~a" frontier)
-					)
-				)
-			)
-		;	(format t "~%curr-state: ~a~%frontier: ~a" curr-state frontier)
-		)
-	)
-)
+						(setf (gethash (format nil "~s" adj-state) explored) adj-state)))))))
+
+
 
 
 ;;;loads a maze problem from a file
-;;;(load "p2.lisp") (load-maze-problem "tinyMaze.lay")
-;;;(load "p2.lisp") (load-maze-problem "smallMaze.lay")
-;;;(load "p2.lisp") (load-maze-problem "mediumMaze.lay")
-;;;(load "p2.lisp") (load-maze-problem "openMaze.lay")
-
 (defun load-maze-problem (filename)
 	(let ((istream (open filename :direction :input :if-does-not-exist nil))
 				(x-dimen)
@@ -183,7 +139,6 @@
 				(return-from load-maze-problem)))
 
 
-		;error: i was passing in make-array as x,y but it expects y,x
 		(setf x-dimen (read istream nil 'eof))
 		(setf y-dimen (read istream nil 'eof))
 		;;reads in values of maze		
@@ -198,7 +153,6 @@
 			(dotimes (col x-dimen)
 				(setf (aref maze row col)
 					(case (char curr-input col)
-						;error: locations were being set as y,x not x,y
 						(#\S 
 							 (setf start-location (list col row))
 							 #\S)
@@ -212,59 +166,39 @@
 		(setf (get problem 'start-state) start-location)
 		(setf (get problem 'goal-state) goal-location)
 
-		
-;		(format t "~%~a" (get problem 'maze))
-;		(format t "~%Start: ~a" (get problem 'start-state))
-;		(format t "~%Goal: ~a" (get problem 'goal-state))
-
 		problem))
 
-	;aref takes it as y,x
-
-;;;(load "p2.lisp") (setf *problem* (load-maze-problem "smallMaze.lay")) (successors *problem* (get *problem* 'start-state)) 
-
-;state vs action
-;what are successors...
 (defun successors (problem state)
 	;;; if down is not %, add to list. etc
-	(let ((successors-list)
-				(action-cost 1))
-		;left
-		(if (not (eq (aref (get problem 'maze) (second state) (1- (first state))) #\%))
-			(push (list
-							(list (1- (first state)) (second state))
-							(list (1- (first state)) (second state)) ;go to... how is this different from state??
-							action-cost) 
-				successors-list))
+	(let* ((successors-list)
+				(action-cost 1)
+				(left-state (list (1- (first state)) (second state)))
+				(right-state (list (1+ (first state)) (second state)))
+				(up-state (list (first state) (1- (second state))))
+				(down-state (list (first state) (1+ (second state))))
+				(curr-state)
+				(possible-successors (list left-state right-state up-state down-state))
+			)
 
-		;right
-		(if (not (eq (aref (get problem 'maze) (second state) (1+ (first state)))  #\%))
-				(push (list
-							(list (1+ (first state)) (second state))
-							(list (1+ (first state)) (second state)) ;go to... how is this different from state??
-							action-cost) 
-				successors-list))
+		(dolist (possible-successor possible-successors)
+			
+			(if (is-valid-successor problem possible-successor)
+				(push (build-successor possible-successor) 
+					successors-list))
+		)
 
-		;up
-		(if (not (eq (aref (get problem 'maze) (1- (second state)) (first state)) #\%))
-			(push (list
-							(list (first state) (1- (second state)))
-							(list (first state) (1- (second state))) ;go to... how is this different from state??
-							action-cost) 
-				successors-list))
-
-		;down
-		(if (not (eq (aref (get problem 'maze) (1+ (second state)) (first state)) #\%))
-			(push (list
-							(list (first state) (1+ (second state)))
-							(list (first state) (1+ (second state))) ;go to... how is this different from state??
-							action-cost) 
-				successors-list))
-
-		;returns successors is (x,y) format
 		successors-list))
 
-;;;(load "p2.lisp") (setf *problem* (load-maze-problem "smallMaze.lay")) (setf *successors* (successors *problem* (get *problem* 'start-state))) (setf *curr-child* (make-child nil (first *successors*))) (setf *successors* (successors *problem* (first *curr-child*)))
+(defun is-valid-successor (problem state)
+	(not (eq #\% (aref (get problem 'maze) (second state) (first state)))))
+
+(defun build-successor (state)
+	(let ((action-cost 1))
+		(list (copy-list state)
+					(copy-list state)
+					action-cost)
+	)
+)
 
 (defun make-child (node successor)
 	(if (null node)
@@ -280,5 +214,15 @@
 		child-node))
 
 (defun goal-test (problem state)
-	(and (eq (first (get problem 'goal-state)) (first state)) 
-			 (eq (second (get problem 'goal-state)) (second state))))
+	(and (eq-states state (get problem 'goal-state))))
+
+;should eventually take a list
+(defun eq-states (state-1 state-2)
+	(and (eq (first state-1) (first state-2))
+			 (eq (second state-1) (second state-2))))
+
+(defun last-elem (the-list)
+	(if (null (cdr the-list))
+		(return-from last-elem (car the-list)))
+	
+	(last-elem (cdr the-list)))
