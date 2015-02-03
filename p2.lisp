@@ -4,6 +4,7 @@
 (defun test-searches ()
 	(let ((search-algos (list #'bfs
 														#'ucs
+														#'gbfs
 														))
 				(valid-mazes (list "tinyMaze.lay" 
 													 "smallMaze.lay"
@@ -53,8 +54,8 @@
 				(start-state-problem (get problem 'start-state))
 				(goal-state-path (last-elem path))
 				(goal-state-problem (get problem 'goal-state)))
-		(if (not (and (eq-states-2 start-state-path start-state-problem)
-						 			(eq-states-2 goal-state-path goal-state-problem)))
+		(if (not (and (equal start-state-path start-state-problem)
+						 			(equal goal-state-path goal-state-problem)))
 			(return-from is-valid-path))) 
 		
 	(dolist (action path)
@@ -79,12 +80,7 @@
 				(curr-node)
 				(curr-state)
 				(curr-path)
-				(curr-path-cost)
 				(adj-state)
-				(adj-action)
-				(adj-action-cost)
-				(full-adj-path)
-				(full-adj-path-cost)
 				(child-node))  
 
 		(do () 
@@ -94,7 +90,6 @@
 
 			(setf curr-state (first curr-node))
 			(setf curr-path (second curr-node))
-			(setf curr-path-cost (third curr-node))
 
 			(if (goal-test problem curr-state)
 				(return-from bfs (reverse curr-path)))
@@ -103,22 +98,16 @@
 
 			(dolist (adj-node (successors problem curr-state))
 				(setf adj-state (first adj-node))
-				(setf adj-action (second adj-node))
-				(setf adj-action-cost (third adj-node))
 
 
 				(if (and (null (gethash adj-state explored)) ;;explored contains states
 								 (null (find adj-node frontier :test #'equal))) ;;frontier contains nodes
 					(progn
-						(setf full-adj-path (cons adj-action (copy-list curr-path)))
-						(setf full-adj-path-cost (+ curr-path-cost adj-action-cost))
-						(setf child-node (list adj-state 
-																	 full-adj-path
-																	 full-adj-path-cost))
-						
+						(setf child-node (make-child curr-node adj-node))
 						(setf frontier (append frontier (cons child-node nil)))
 						(setf (gethash adj-state explored) adj-state) ;do we really need to hash it here?
 						))))))
+
 
 (defun ucs (problem)
 	(let* ((explored (make-hash-table :test #'equal))
@@ -127,12 +116,7 @@
 				(curr-node)
 				(curr-state)
 				(curr-path)
-				(curr-path-cost)
 				(adj-state)
-				(adj-action)
-				(adj-action-cost)
-				(full-adj-path)
-				(full-adj-path-cost)
 				(child-node)
 				(curr-node-in-frontier))  
 
@@ -142,7 +126,6 @@
 
 			(setf curr-state (first curr-node))
 			(setf curr-path (second curr-node))
-			(setf curr-path-cost (third curr-node))
 			
 			(if (goal-test problem curr-state)
 				(return-from ucs (reverse curr-path)))
@@ -152,34 +135,63 @@
 
 			(dolist (adj-node (successors problem curr-state))
 				(setf adj-state (first adj-node))
-				(setf adj-action (second adj-node))
-				(setf adj-action-cost (third adj-node))
 
-				(setf full-adj-path-cost (+ curr-path-cost adj-action-cost))
-				(setf full-adj-path (cons adj-action (copy-list curr-path))) 
-				(setf child-node (list adj-state 
-															 full-adj-path
-															 full-adj-path-cost))
+				(setf child-node (make-child curr-node adj-node))
 
-
-				(if (null (no-duplicates frontier))
-					(return-from ucs "duplicates in frontier"))
 
 				(setf curr-node-in-frontier (find adj-node frontier :test #'equal))
-				(if (and (null (gethash adj-state explored)) ;;explored contains states
-								 (null curr-node-in-frontier)) ;;frontier contains nodes
-					(progn
-						(setf frontier (ins-repl frontier child-node)))
+				(if (null (gethash adj-state explored)) ;;explored contains states
+						(setf frontier (ins-repl frontier child-node #'third)))))))
 
-					;if in frontier and child-node has a lower path cost, replace curr-node-in-frontier with child-node
-					;else
-					(progn
-						(if (and (not (null curr-node-in-frontier))
-										 (> (compare-frontier-node-costs curr-node-in-frontier child-node) 0))
-							;replace frontier with a new one with curr-node-in-frontier removed and child-node added
-							(progn
-								(setf frontier (remove curr-node-in-frontier frontier :test #'equal))
-								(setf frontier (ins-repl frontier child-node))))))))))
+
+
+(defun gbfs (problem)
+	(let* ((explored (make-hash-table :test #'equal))
+				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0 (get problem 'start-state)))
+				(frontier (list start-node)) ;"priorityqueue" is a sorted list
+				(curr-node)
+				(curr-state)
+				(curr-path)
+				(adj-state)
+				(child-node))  
+
+		(do () 
+			((eq (length frontier) 0) nil) 
+			
+			(setf curr-node (pop frontier))
+
+			(setf curr-state (first curr-node))
+			(setf curr-path (second curr-node))
+
+			(if (goal-test problem curr-state)
+				(return-from gbfs (reverse curr-path)))
+
+			(setf (gethash curr-state explored) curr-state)
+			
+			(dolist (adj-node (successors problem curr-state))
+				(setf adj-state (first adj-node))
+
+				;TODO: use make-child here!
+				(setf child-node (make-child curr-node adj-node))
+				(setf child-node (append child-node (cons (f-gbfs problem adj-state) nil)))
+
+
+				(setf curr-node-in-frontier (find adj-node frontier :test #'equal))
+				(if (and (null (gethash adj-state explored)) (null curr-node-in-frontier)) ;;explored contains states
+					;don't technically need to check the frontier for this particular problem
+						(setf frontier (ins-repl frontier child-node #'fourth))))
+			)))
+
+(defun f-gbfs (problem state)
+	(euclidean-dist state (get problem 'goal-state)))
+
+(defun euclidean-dist (state-1 state-2)
+	(let ((x1 (first state-1))
+				(x2 (first state-2))
+				(y1 (second state-1))
+				(y2 (second state-2)))
+	(+ (* (- x1 x2) (- x1 x2))
+		 (* (- y1 y2) (- y1 y2))))) 
 
 
 ;works
@@ -215,9 +227,9 @@
 				(new-elem '(Z nil 3)))
 
 		(dolist (curr-list lists)
-			(setf res (ins-repl curr-list new-elem))
+			(setf res (ins-repl curr-list new-elem #'third))
 			;(format t "~%~a" res)
-			(if (or (null (is-sorted res)) (null (no-duplicates res)))
+			(if (or (null (is-sorted res #'third)) (null (no-duplicates res)))
 				(progn
 					(setf tests-res nil)
 					(format t "~%TEST FAIL: input: ~a res: ~a " curr-list res))
@@ -228,26 +240,26 @@
 		tests-res))
 
 
-(defun ins-repl (succs s)
+(defun ins-repl (succs s elem-num)
 	(if (null succs)
 		(return-from ins-repl (list s)))
 
 	(if (equal (first (car succs)) (first s))
 		(return-from ins-repl (copy-list succs)))
 
-	(if (< (third (car succs)) (third s))
-			(return-from ins-repl (cons (car succs) (ins-repl (cdr succs) s)))	)
+	(if (< (funcall elem-num (car succs)) (funcall elem-num s))
+			(return-from ins-repl (cons (car succs) (ins-repl (cdr succs) s elem-num))))
 
 	(cons s (remove s succs :test #'(lambda (n m) (equal (first n) (first m))   ))))
 
 	
 ;works
-(defun is-sorted (the-list)
+(defun is-sorted (the-list elem-num)
 	(if (or (null the-list) (null (cdr the-list)))
 		(return-from is-sorted t))
 
-	(if (<= (compare-frontier-node-costs (first the-list) (second the-list)) 0)
-		(is-sorted (cdr the-list))
+	(if (<= (compare-frontier-nodes (first the-list) (second the-list) elem-num) 0)
+		(is-sorted (cdr the-list) elem-num)
 		nil))
 
 ;works
@@ -297,14 +309,11 @@
 
 
 ;point to lower one
-(defun compare-frontier-node-costs (node-1 node-2)
+(defun compare-frontier-nodes (node-1 node-2 elem-num)
 	(cond
-		((< (third node-1) (third node-2)) -1) ;lower is first
-		((= (third node-1) (third node-2)) 0)
-		((> (third node-1) (third node-2)) 1))) ;lower is second
-
-
-
+		((< (funcall elem-num node-1) (funcall elem-num node-2)) -1) ;lower is first
+		((= (funcall elem-num node-1) (funcall elem-num node-2)) 0)
+		((> (funcall elem-num node-1) (funcall elem-num node-2)) 1))) ;lower is second
 
 
 
@@ -382,47 +391,49 @@
 (defun is-valid-successor (problem state)
 	(not (eq #\% (aref (get problem 'maze) (second state) (first state)))))
 
-(defun build-successor (state)
+(defun build-successor (state )
 	(let ((action-cost 1))
 		(list (copy-list state) ;can get away with copying only once and using the original for the rest
 					(copy-list state)
 					action-cost)))
-
 
 (defun make-child (node successor)
 	(if (null node)
 		(let ((child-node successor))
 			(return-from make-child child-node))) 
 
-	(let ((child-node node))
+	(let ((curr-state)
+				(curr-path)
+				(curr-path-cost)
+				(child-state)
+				(child-action)
+				(child-action-cost)
+				(full-child-path-cost)
+				(full-child-path)
+				(child-node))
+
+		(setf curr-state (first node))
+		(setf curr-path (second node))
+		(setf curr-path-cost (third node))
+
+		(setf child-state (first successor))
+		(setf child-action (second successor))
+		(setf child-action-cost (third successor))
+
+		(setf full-child-path-cost (+ curr-path-cost child-action-cost))
+		(setf full-child-path (cons child-action (copy-list curr-path))) 
 		
-		(setf (first child-node) (first successor))
-		(append (second successor) (second child-node))
-		(setf (third child-node) (+ (third child-node) (third successor)))
+		(setf child-node (list child-state 
+													 full-child-path
+													 full-child-path-cost))
+
 
 		child-node))
 
 (defun goal-test (problem state)
-	(and (eq-states-2 state (get problem 'goal-state))))
+	(and (equal state (get problem 'goal-state))))
 
-;wrapper for eq-states-list
-;eventually should refactor eq-states out (generic functions?)
-;need to make list the + operator that can take unlimited arguments
-(defun eq-states-2 (state1 state2)
-	(eq-states-list (list state1 state2)))
-
-;generic eq-states
-(defun eq-states-list (states)
-	(let ((base-state (first states)))
-		(dolist (state states)
-			(if (not (and (eq (first state) (first base-state))
-										(eq (second state) (second base-state))))
-				(return-from eq-states-list)
-			)
-		)
-		
-		t))
-
+;only used for tests
 (defun last-elem (the-list)
 	(if (null (cdr the-list))
 		(return-from last-elem (car the-list)))
