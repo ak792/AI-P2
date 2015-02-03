@@ -1,13 +1,16 @@
 
 
 
-(defun run-search-tests ()
-	(let ((search-algos (list; #'bfs
-														#'ucs))
+(defun test-searches ()
+	(let ((search-algos (list #'bfs
+														#'ucs
+														))
 				(valid-mazes (list "tinyMaze.lay" 
-													 ;"smallMaze.lay" "mediumMaze.lay" "openMaze.lay"
+													 "smallMaze.lay"
+													 "mediumMaze.lay"
+													 "openMaze.lay"
 													 ))
-				(invalid-mazes (list ;"goalUnreachableMaze.lay"
+				(invalid-mazes (list "goalUnreachableMaze.lay"
 														 ))
 				(tests-res t)
 				(test-success)
@@ -70,7 +73,7 @@
 
 ;;if never finds the goal-state, returns nil
 (defun bfs (problem)
-	(let* ((explored (make-hash-table :test 'equal))
+	(let* ((explored (make-hash-table :test #'equal))
 				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0))
 				(frontier (list start-node)) ;should be a queue
 				(curr-node)
@@ -84,8 +87,8 @@
 				(full-adj-path-cost)
 				(child-node))  
 
-		(do ((i 0 (1+ i))) 
-			((or (eq i -1) (eq (length frontier) 0)) nil) ;replace i with eq 1 for testing
+		(do () 
+			((eq (length frontier) 0) nil) 
 			
 			(setf curr-node (pop frontier))
 
@@ -96,7 +99,7 @@
 			(if (goal-test problem curr-state)
 				(return-from bfs (reverse curr-path)))
 
-			(setf (gethash (format nil "~s" curr-state) explored) curr-state)
+			(setf (gethash curr-state explored) curr-state)
 
 			(dolist (adj-node (successors problem curr-state))
 				(setf adj-state (first adj-node))
@@ -104,7 +107,7 @@
 				(setf adj-action-cost (third adj-node))
 
 
-				(if (and (null (gethash (format nil "~s" adj-state) explored)) ;;explored contains states
+				(if (and (null (gethash adj-state explored)) ;;explored contains states
 								 (null (find adj-node frontier :test #'equal))) ;;frontier contains nodes
 					(progn
 						(setf full-adj-path (cons adj-action (copy-list curr-path)))
@@ -114,12 +117,13 @@
 																	 full-adj-path-cost))
 						
 						(setf frontier (append frontier (cons child-node nil)))
-						(setf (gethash (format nil "~s" adj-state) explored) adj-state))))))) ;do we really need to hash it here?
+						(setf (gethash adj-state explored) adj-state) ;do we really need to hash it here?
+						))))))
 
 (defun ucs (problem)
-	(let* ((explored (make-hash-table :test 'equal))
+	(let* ((explored (make-hash-table :test #'equal))
 				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0))
-				(frontier (list start-node)) ;sorted list. really should be a queue
+				(frontier (list start-node))
 				(curr-node)
 				(curr-state)
 				(curr-path)
@@ -132,169 +136,183 @@
 				(child-node)
 				(curr-node-in-frontier))  
 
-	;	(format t "starting ucs with start-node ~a" start-node)
-
-		(do ((i 0 (1+ i))) 
-			((or (eq i 1) (eq (length frontier) 0)) nil) ;replace i with eq 1 for testing
-;			(format t "~%getting new node. frontier: ~a" frontier)
+		(do () 
+			((eq (length frontier) 0) nil) 
 			(setf curr-node (pop frontier))
 
 			(setf curr-state (first curr-node))
 			(setf curr-path (second curr-node))
 			(setf curr-path-cost (third curr-node))
 			
-;			(format t "~%parsing new node: ~%curr-node ~a, curr-state ~a" curr-node curr-state)
-
-
 			(if (goal-test problem curr-state)
 				(return-from ucs (reverse curr-path)))
 
-;			(format t "~%post goal-test")
-
-			(setf (gethash (format nil "~s" curr-state) explored) curr-state)
+			(setf (gethash curr-state explored) curr-state)
 
 
-;			(format t "~%put new node into hash table")
-			
 			(dolist (adj-node (successors problem curr-state))
-;				(format t "here")
 				(setf adj-state (first adj-node))
 				(setf adj-action (second adj-node))
 				(setf adj-action-cost (third adj-node))
-	;			(format t "here2")
 
 				(setf full-adj-path-cost (+ curr-path-cost adj-action-cost))
-				(setf full-adj-path (cons adj-action (copy-list curr-path))) ;inefficient. should really do only if needed
+				(setf full-adj-path (cons adj-action (copy-list curr-path))) 
 				(setf child-node (list adj-state 
 															 full-adj-path
 															 full-adj-path-cost))
 
-				;probably need to change the find function test
-				;need to insert into frontier at right spot, replacing if needed
-				
-				;if not in explored or frontier, add to frontier
 
-;				(format t "~%child-node: ~a" child-node)
-				(format t "~%checking adj node. frontier: ~a" frontier)
+				(if (null (no-duplicates frontier))
+					(return-from ucs "duplicates in frontier"))
+
 				(setf curr-node-in-frontier (find adj-node frontier :test #'equal))
-				(if (and (null (gethash (format nil "~s" adj-state) explored)) ;;explored contains states
+				(if (and (null (gethash adj-state explored)) ;;explored contains states
 								 (null curr-node-in-frontier)) ;;frontier contains nodes
 					(progn
-						(format t "~% test insert: ~a" (insert-into-frontier frontier child-node))
-						(setf frontier (insert-into-frontier frontier child-node))
-			;			(setf (gethash (format nil "~s" adj-state) explored) adj-state)
-						(format t "~% was not in frontier or explored. added to frontier: ~a" frontier)
-					)
+						(setf frontier (ins-repl frontier child-node)))
 
 					;if in frontier and child-node has a lower path cost, replace curr-node-in-frontier with child-node
 					;else
 					(progn
 						(if (and (not (null curr-node-in-frontier))
-										 (> (compare-frontier-node-costs curr-node-in-frontier child-node) 0)
-								)
+										 (> (compare-frontier-node-costs curr-node-in-frontier child-node) 0))
 							;replace frontier with a new one with curr-node-in-frontier removed and child-node added
 							(progn
 								(setf frontier (remove curr-node-in-frontier frontier :test #'equal))
-								(setf frontier (insert-into-frontier frontier child-node))
-							)
-						)
-					)
-				)
+								(setf frontier (ins-repl frontier child-node))))))))))
 
-				
-			)
-		)
-
-		(format t "~%reached end of ucs")
-	)
-)
 
 ;works
-(defun run-tests-insert-into-frontier ()
-	(let* ((the-list '((nil nil 1) (nil nil 2) (nil nil 3) (nil nil 4) (nil nil 6)))
-				(end-list '((nil nil 1) (nil nil 2) (nil nil 3) (nil nil 4)))
-				(front-list '((nil nil 7) (nil nil 8) (nil nil 83)))
-				(one-elem-list '((nil nil 6)))
-				(one-elem-list-back '((nil nil 3)))
-				(two-elem-list '((nil nil 4) (nil nil 6)))
+(defun test-ins-repl ()
+	(let* (
+				(the-list '((A nil 1) (B nil 2) (C nil 3) (D nil 4) (E nil 6)))
+				(end-list '((A nil 1) (B nil 2) (C nil 3) (D nil 4)))
+				(front-list '((A nil 7) (B nil 8) (C nil 83)))
+				(one-elem-list '((A nil 6)))
+				(one-elem-list-back '((A nil 3)))
+				(two-elem-list '((A nil 4) (B nil 6)))
 				(empty-list)
+				(repl-the-list '((A nil 1) (B nil 2) (Z nil 3) (D nil 4) (E nil 6)))
+				(repl-end-list '((A nil 1) (B nil 2) (C nil 3) (Z nil 4)))
+				(repl-front-list '((Z nil 7) (B nil 8) (C nil 83)))
+				(repl-one-elem-list '((Z nil 6)))
+				(repl-two-elem-list '((Z nil 4) (B nil 6)))
 				(res)
 				(tests-res t)
 				(lists (list the-list
-										 end-list front-list
-										 one-elem-list one-elem-list-back two-elem-list empty-list
+										 end-list 
+									   front-list
+										 one-elem-list
+										 one-elem-list-back 
+										 two-elem-list 
+									 	 empty-list
+										 repl-the-list
+										 repl-end-list
+										 repl-front-list
+										 repl-one-elem-list
+										 repl-two-elem-list
 										 ))
-				(new-elem '(nil nil 5))
-				)
-				
+				(new-elem '(Z nil 3)))
+
 		(dolist (curr-list lists)
-			(setf res (insert-into-frontier curr-list new-elem))
-		;	(format t "~%~a: ~a" (is-sorted res) res)
-			(if (null (is-sorted res))
+			(setf res (ins-repl curr-list new-elem))
+			;(format t "~%~a" res)
+			(if (or (null (is-sorted res)) (null (no-duplicates res)))
 				(progn
 					(setf tests-res nil)
-					(format t "~%TEST FAIL: input: ~a res: ~a " curr-list res))))
+					(format t "~%TEST FAIL: input: ~a res: ~a " curr-list res))
+			)
+		)
 
-		(format t "~%tests-insert-into-frontier res: ~a" tests-res)
+		(format t "~%test-ins-repl res: ~a" tests-res)
 		tests-res))
 
 
-;update to handle the actual contents that will be in the frontier
-;change the < operator
+(defun ins-repl (succs s)
+	(if (null succs)
+		(return-from ins-repl (list s)))
 
+	(if (equal (first (car succs)) (first s))
+		(return-from ins-repl (copy-list succs)))
 
-(defun insert-into-frontier (the-list elem)
-	(if (null the-list)
-		(return-from insert-into-frontier elem))
+	(if (< (third (car succs)) (third s))
+			(return-from ins-repl (cons (car succs) (ins-repl (cdr succs) s)))	)
 
-	(if (null elem)
-		(return-from insert-into-frontier the-list))
+	(cons s (remove s succs :test #'(lambda (n m) (equal (first n) (first m))   ))))
 
-	(format t "insert ~a into frontier ~a" elem the-list)
-	(if (< (compare-frontier-node-costs elem (first the-list)) 0)
-		(cons elem the-list)
-		(insert-into-frontier-aux the-list elem)))
-
-(defun insert-into-frontier-aux (the-list elem)
-	(format t "here")
-	(let ((res))
-		(if (null the-list)
-			(return-from insert-into-frontier-aux))
-
-		
-	(format t "here")
-		(format t "~%the-list ~a ~a ~a" the-list elem (and (not (null elem)) (null (second the-list))))
-		
-		
-		(if (and (not (null elem)) 
-						 (or (null (second the-list)) 
-								 (< (compare-frontier-node-costs elem (second the-list)) 0 )))
-			(progn
-				(format t "~%if evaluated to T")
-				(setf res (cons (car the-list) (cons elem (insert-into-frontier-aux (cdr the-list) nil))))
-			)
-			(progn
-				(format t "~%if evaluted to nil")
-				(setf res (cons (car the-list) (insert-into-frontier-aux (cdr the-list) elem))))
-			)
-		
-		res))
-
+	
+;works
 (defun is-sorted (the-list)
 	(if (or (null the-list) (null (cdr the-list)))
 		(return-from is-sorted t))
 
-	(if (< (compare-frontier-node-costs (first the-list) (second the-list)) 0)
+	(if (<= (compare-frontier-node-costs (first the-list) (second the-list)) 0)
 		(is-sorted (cdr the-list))
 		nil))
 
+;works
+(defun no-duplicates (the-list)
+	(no-duplicates-aux the-list (make-hash-table :test #'equal)))
+
+(defun no-duplicates-aux (the-list contents)
+
+	(if (null the-list)
+		(return-from no-duplicates-aux t))
+
+	(if (not (null (gethash (first (car the-list)) contents) ) )
+		(return-from no-duplicates-aux nil))
+
+		(setf (gethash (first (car the-list)) contents) (first (car the-list)))
+		(no-duplicates-aux (cdr the-list) contents))
+
+(defun test-no-duplicates ()
+	(let* ((the-list '((A nil 1) (B nil 2) (C nil 3) (D nil 4) (E nil 6)))
+				(end-list '((A nil 1) (B nil 2) (C nil 3) (D nil 4)))
+				(front-list '((A nil 7) (B nil 8) (C nil 83)))
+				(one-elem-list '((A nil 6)))
+				(one-elem-list-back '((A nil 3)))
+				(two-elem-list '((A nil 4) (B nil 6)))
+				(empty-list)
+				(tests-res t)
+				(valid-lists (list the-list end-list front-list one-elem-list one-elem-list-back two-elem-list empty-list))
+				 (invalid-lists (list (cons '(D nil 2) the-list)
+															(cons '(E nil 2) the-list)
+															(cons '(A nil 2) the-list)
+															)))
+				
+		(dolist (curr-list valid-lists)
+			(if (null (no-duplicates curr-list))
+				(progn
+					(setf tests-res nil)
+					(format t "~%TEST FAIL: input: ~a " curr-list))))
+		
+		(dolist (curr-list invalid-lists)
+			(if (not (null (no-duplicates curr-list)))
+				(progn
+					(setf tests-res nil)
+					(format t "~%TEST FAIL: input: ~a no-duplicates: ~a" curr-list (no-duplicates curr-list)))))
+		
+		(format t "~%test-no-duplicates res: ~a" tests-res)
+		tests-res))
+
+
 ;point to lower one
 (defun compare-frontier-node-costs (node-1 node-2)
-	(format t "~%comparing costs ~a ~a" node-1 node-2)
 	(cond
 		((< (third node-1) (third node-2)) -1) ;lower is first
 		((= (third node-1) (third node-2)) 0)
 		((> (third node-1) (third node-2)) 1))) ;lower is second
+
+
+
+
+
+
+
+
+
+
+
 
 
 ;;;loads a maze problem from a file
