@@ -1,6 +1,5 @@
 
-
-
+;should move tests to a different file
 (defun test-searches ()
 	(let ((search-algos (list #'bfs
 														#'ucs
