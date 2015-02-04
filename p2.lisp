@@ -1,9 +1,10 @@
 
 ;should move tests to a different file
 (defun test-searches ()
-	(let ((search-algos (list #'bfs
+	(let ((search-algos (list  #'bfs
 														#'ucs
 														#'gbfs
+														#'a*
 														))
 				(valid-mazes (list "tinyMaze.lay" 
 													 "smallMaze.lay"
@@ -35,11 +36,10 @@
 
 		tests-res))
 
-;;currently only bfs
 (defun assert-maze-solution (maze-filename search-algo expected)
 	(let* ((problem (load-maze-problem maze-filename))
 				 (solution (funcall search-algo problem))
-				 (res (is-valid-path problem solution)))
+				 (res (is-valid-solution problem solution)))
 		
 		;(format t "~%~s solution: ~a" maze-filename solution)
 
@@ -48,33 +48,28 @@
 
 		(eq expected res)))
 
-(defun is-valid-path (problem path)
-	(let ((start-state-path (first path))
-				(start-state-problem (get problem 'start-state))
-				(goal-state-path (last-elem path))
-				(goal-state-problem (get problem 'goal-state)))
-		(if (not (and (equal start-state-path start-state-problem)
-						 			(equal goal-state-path goal-state-problem)))
-			(return-from is-valid-path))) 
-		
-	(dolist (action path)
-		(let ((len-x (second (array-dimensions (get problem 'maze))))
-					(len-y (first (array-dimensions (get problem 'maze))))
-					(action-x (first action))
-					(action-y (second action)))
-			(if (or (>= action-x len-x)
-							(< action-x 0)
-							(>= action-y len-y)
-							(< action-y 0)
-							(eq #\% (aref (get problem 'maze) action-y action-x)))
-				(return-from is-valid-path))))
+(defun is-valid-solution (problem path)
+	(not (null (is-valid-path problem (get problem 'start-state) path))))
 
-	t)
+
+
+(defun is-valid-path (problem state path)
+;	(format t "~%state ~a path ~a" state path)
+
+	(if (null path)
+		(return-from is-valid-path))
+		
+	;if one away from goal
+	(if (goal-test problem (result state (first path)))
+		(return-from is-valid-path (result state (first path))))
+
+	(and (is-valid-state problem (result state (first path)))
+			 (is-valid-path problem (result state (first path)) (cdr path))))
 
 ;;if never finds the goal-state, returns nil
 (defun bfs (problem)
 	(let* ((explored (make-hash-table :test #'equal))
-				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0))
+				(start-node (list (get problem 'start-state) nil 0))
 				(frontier (list start-node)) ;should be a queue
 				(curr-node)
 				(curr-state)
@@ -110,7 +105,7 @@
 
 (defun ucs (problem)
 	(let* ((explored (make-hash-table :test #'equal))
-				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0))
+				(start-node (list (get problem 'start-state) nil 0))
 				(frontier (list start-node))
 				(curr-node)
 				(curr-state)
@@ -146,8 +141,8 @@
 
 (defun gbfs (problem)
 	(let* ((explored (make-hash-table :test #'equal))
-				(start-node (list (get problem 'start-state) (list (get problem 'start-state)) 0 (get problem 'start-state)))
-				(frontier (list start-node)) ;"priorityqueue" is a sorted list
+				(start-node (list (get problem 'start-state) nil 0))
+				(frontier (list (append start-node (f-gbfs start-node (get problem 'goal-state))))) 
 				(curr-node)
 				(curr-state)
 				(curr-path)
@@ -170,19 +165,66 @@
 			(dolist (adj-node (successors problem curr-state))
 				(setf adj-state (first adj-node))
 
-				;TODO: use make-child here!
 				(setf child-node (make-child curr-node adj-node))
-				(setf child-node (append child-node (cons (f-gbfs problem adj-state) nil)))
+				(setf child-node (append child-node (cons (f-gbfs child-node (get problem 'goal-state)) nil)))
 
 
 				(setf curr-node-in-frontier (find adj-node frontier :test #'equal))
 				(if (and (null (gethash adj-state explored)) (null curr-node-in-frontier)) ;;explored contains states
 					;don't technically need to check the frontier for this particular problem
-						(setf frontier (ins-repl frontier child-node #'fourth))))
-			)))
+						(setf frontier (ins-repl frontier child-node #'fourth)))))))
 
-(defun f-gbfs (problem state)
-	(euclidean-dist state (get problem 'goal-state)))
+
+(defun a* (problem)
+	(let* ((explored (make-hash-table :test #'equal))
+				(start-node (list (get problem 'start-state) nil 0))
+				(frontier (list (append start-node (f-a* start-node (get problem 'goal-state))))) 
+				(curr-node)
+				(curr-state)
+				(curr-path)
+				(adj-state)
+				(child-node))  
+
+		(do () 
+			((eq (length frontier) 0) nil) 
+			
+			(setf curr-node (pop frontier))
+
+			(setf curr-state (first curr-node))
+			(setf curr-path (second curr-node))
+
+			(if (goal-test problem curr-state)
+				(return-from a* (reverse curr-path)))
+
+			(setf (gethash curr-state explored) curr-state)
+			
+			(dolist (adj-node (successors problem curr-state))
+				(setf adj-state (first adj-node))
+
+				(setf child-node (make-child curr-node adj-node))
+				(setf child-node (append child-node (cons (f-a* child-node (get problem 'goal-state)) nil)))
+
+
+				(setf curr-node-in-frontier (find adj-node frontier :test #'equal))
+				(if (and (null (gethash adj-state explored)) (null curr-node-in-frontier)) ;;explored contains states
+					;don't technically need to check the frontier for this particular problem
+						(setf frontier (ins-repl frontier child-node #'fourth)))))))
+
+
+(defun f-ucs (node)
+	(g node))
+
+(defun f-gbfs (node goal-state)
+	(h goal-state (first node)))
+
+(defun f-a* (node goal-state)
+	(+ (g node) (h goal-state (first node))))
+
+(defun g (node)
+	(third node))
+
+(defun h (goal-state state)
+	(euclidean-dist state goal-state))
 
 (defun euclidean-dist (state-1 state-2)
 	(let ((x1 (first state-1))
@@ -249,7 +291,7 @@
 	(if (< (funcall elem-num (car succs)) (funcall elem-num s))
 			(return-from ins-repl (cons (car succs) (ins-repl (cdr succs) s elem-num))))
 
-	(cons s (remove s succs :test #'(lambda (n m) (equal (first n) (first m))   ))))
+	(cons s (remove s succs :test #'(lambda (n m) (equal (first n) (first m))))))
 
 	
 ;works
@@ -374,27 +416,51 @@
 
 
 (defun successors (problem state)
-	(let* ((left-state (list (1- (first state)) (second state)))
-				(right-state (list (1+ (first state)) (second state)))
-				(up-state (list (first state) (1- (second state))))
-				(down-state (list (first state) (1+ (second state))))
-				(possible-successors (list left-state right-state up-state down-state))
+	(let* ((action-cost 1)
+				 (actions (list 'W 'E 'N 'S))
+				 (west-state (result state 'W))
+				(east-state (result state 'E))
+				(north-state (result state 'N))
+				(south-state (result state 'S))
+				(possible-successors)
+				(curr-successor)
 				(successors-list))
 
-		(dolist (possible-successor possible-successors)
-			(if (is-valid-successor problem possible-successor)
-				(push (build-successor possible-successor) successors-list)))
+		(dolist (action actions)
+			(setf curr-successor (list (result state action)
+																						action
+																						action-cost))
+			(if (is-valid-state problem (first curr-successor))
+				(push curr-successor successors-list)))
 
 		successors-list))
 
-(defun is-valid-successor (problem state)
+(defun is-valid-state (problem state)
 	(not (eq #\% (aref (get problem 'maze) (second state) (first state)))))
 
-(defun build-successor (state )
-	(let ((action-cost 1))
-		(list (copy-list state) ;can get away with copying only once and using the original for the rest
-					(copy-list state)
-					action-cost)))
+(defun test-result ()
+	(let ((tests-res t))
+
+		(if (not (equal (result '(5 5) 'W) '(4 5)))
+			(setf tests-res nil))
+
+		(if (not (equal (result '(5 5) 'E) '(6 5)))
+			(setf tests-res nil))
+
+		(if (not (equal (result '(5 5) 'N) '(5 4)))
+			(setf tests-res nil))
+
+		(if (not (equal (result '(5 5) 'S) '(5 6)))
+			(setf tests-res nil))
+	
+	tests-res))
+
+(defun result (state action)
+	(cond
+		((eq action 'W) (list (1- (first state)) (second state)))
+		((eq action 'E) (list (1+ (first state)) (second state)))
+		((eq action 'N) (list (first state) (1- (second state))))
+		((eq action 'S) (list (first state) (1+ (second state))))))
 
 (defun make-child (node successor)
 	(if (null node)
